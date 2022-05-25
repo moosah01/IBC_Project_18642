@@ -29,14 +29,19 @@ interface ERC20Interface {
 }
 
 contract moosaToken is ERC20Interface {
+
+    //token name and symbol
     string public name = "MoosaHaseem";
     string public symbol = "MH";
-    uint public decimals = 0;
+
 
     uint public supply;
     address public founder;
 
+
+    //track how much balance each address has
     mapping (address=>uint) public balances;
+    //allowed is explained above in interface
     mapping(address=>mapping(address=>uint)) allowed;
 
     //events allow you to write data on the blockchain
@@ -45,6 +50,9 @@ contract moosaToken is ERC20Interface {
     //event Transfer ( address indexed from, address indexed to, uint tokens);
     
     constructor() {
+
+        //maximum tokens available, the first person who deploys the contract is the founder or creator 
+        //of the coin and holds all of the coins intiially
         supply = 500000;
         founder = msg.sender;
         balances[founder] = supply;
@@ -55,19 +63,29 @@ contract moosaToken is ERC20Interface {
          _;
      }
 
+    //explained above
     function allowance(address tokenOwner, address spender ) public view override returns (uint remaining) {
         return allowed[tokenOwner][spender];
     }
 
-    function approve( address spender, uint tokens ) public override returns (bool success) {
-        require(balances[msg.sender] >= tokens);
-        require(tokens > 0);
-        allowed[msg.sender][spender] = tokens;
-        emit Approval(msg.sender, spender, tokens);
+    //this is a check to see whether the amount of tokens the person calling want to trasnfer
+    //and whether they even have those many tokens available or not
+    function approve( address spender, uint tokensToBeSpent ) public override returns (bool success) {
+        require(balances[msg.sender] >= tokensToBeSpent);
+        require(tokensToBeSpent > 0);
+        allowed[msg.sender][spender] = tokensToBeSpent;
+        //write to blockchain the success of the POSSIBILITY of the transaction
+        //this approve function is necessary b/c as he explained, information about token transfer 
+        //and available money must be propogated through the blockchain so everyone should have the record of it
+        //is this why we emit it?
+        emit Approval(msg.sender, spender, tokensToBeSpent);
         return true;
     } 
 
 
+    //like transfer but you specify transferform --> this would be dangerous to give functionality to other people to transfer 
+    //money from separate address but that is why we have admins and the allowed function
+    // --> confirm with sir
     function transferFrom (address from, address to, uint tokensToBeSent) public virtual override returns (bool success) {
         require(allowed[from][to] > tokensToBeSent );
         require(balances[from] >= tokensToBeSent);
@@ -77,14 +95,18 @@ contract moosaToken is ERC20Interface {
         return true;
     }
 
+    //self explanatory
     function totalSupply() public view override returns(uint) {
         return supply;
     }
 
+    //current available coins of function caller
     function balanceOf( address User ) public view override returns (uint balance) {
         return balances[User];
     } 
 
+
+    //like transfer --> explained above
     function transfer(address to, uint tokensToBeSent) public virtual returns (bool success) {
         require (balances[msg.sender] >= tokensToBeSent);
         require( tokensToBeSent > 0 );
@@ -96,20 +118,22 @@ contract moosaToken is ERC20Interface {
 }
 
 contract moosaICO is moosaToken {
-    address public admin;
-    address payable public depositAddress;
-    uint public tokenPrice = 0.05 ether;
-    uint public hardCap = 300 ether;
+
+   
+    address public admin;  // guy with rights to make changes
+    address payable public depositAddress; // address for transfer
+    uint public tokenPrice = 0.05 ether; //price of token
+    uint public hardCap = 300 ether; // price cannot be more than this eva --> done ot ocntorl economy
     uint public raisedAmount;
-    uint public crowdFundStart = block.timestamp;
-    uint public crowdFundEnd= crowdFundStart + 7 days;
+    uint public crowdFundStart = block.timestamp; 
+    uint public crowdFundEnd= crowdFundStart + 7 days; // I used 7 days b/c it was like that in the example sir did
 
-    uint coinTradeStart = crowdFundEnd + 7 days;
+    uint coinTradeStart = crowdFundEnd + 7 days; // I used 7 days b/c it was like that in the example sir did
 
-    uint public maxInvestment= 2 ether;
+    uint public maxInvestment= 2 ether; 
     uint public minInvestment= 0.05 ether;
 
-    enum State{beforeStart, Running, afterEnd, Halted}
+    enum State{beforeStart, Running, afterEnd, Halted} //according to ERC20 guidelines we must have these states
     State public icoState;
 
     modifier onlyAdmin {
@@ -125,14 +149,17 @@ contract moosaICO is moosaToken {
         icoState = State.beforeStart;
     }
 
+    //halting in case of emergencies
     function halt() public onlyAdmin{
         icoState=State.Halted;
     }
-    
+
+    //for exchange of this ICO to occur, the state of the ICO must NOT be halted    
     function unhalt() public onlyAdmin{
         icoState=State.Running;
     }
 
+    //to change from admin!
     function changeDepositAddress (address payable _depositAddress) public onlyAdmin {
         depositAddress = _depositAddress;
     }
@@ -164,16 +191,21 @@ contract moosaICO is moosaToken {
         return true;
     }
 
+    //same as the one in moosaToken --> function of parent called
     function transfer( address to, uint tokensToBeSent) public override returns (bool) {
         require(block.timestamp > coinTradeStart);
         super.transfer(to,tokensToBeSent);
     }
 
+        //same as the one in moosaToken --> function of parent called
     function transferFrom( address from, address to, uint tokensToBeSent) public override returns (bool) {
         require(block.timestamp > coinTradeStart);
         super.transferFrom(from,to,tokensToBeSent);
     }
 
+    //makes the tokens permanently unspendable
+    //permanently removed from circulation
+    //not sure if this works but it is what was there in sir's example and stackoverflow
     function burn() public returns (bool) {
         icoState = getCurrentState();
         require(icoState == State.afterEnd);
